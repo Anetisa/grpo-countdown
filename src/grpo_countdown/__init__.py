@@ -16,6 +16,11 @@ from .loss import (
     compute_token_logprobs,
     grpo_loss,
 )
+from .train import (
+    build_rollout_batch,
+    grpo_update,
+    sequence_logprobs,
+)
 
 __all__ = [
     "CountdownProblem",
@@ -28,6 +33,9 @@ __all__ = [
     "broadcast_advantage_to_tokens",
     "grpo_loss",
     "compute_token_logprobs",
+    "build_rollout_batch",
+    "sequence_logprobs",
+    "grpo_update",
 ]
 
 __version__ = "0.1.0"

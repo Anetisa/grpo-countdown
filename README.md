@@ -20,11 +20,11 @@ Built incrementally; each piece is tested on CPU as it lands.
 
 - [x] **Countdown task + verifiable reward** — safe (`ast`-based, no `eval`) reward,
       guaranteed-solvable problem generation, exploit tests
-- [ ] **Group-relative advantage** — per-group reward normalization (the GRPO core)
-- [ ] **GRPO loss** — advantage-weighted log-probs + KL to a reference policy
-- [ ] **Rollout + training loop** — sample G completions, score, update
+- [x] **Group-relative advantage** — per-group reward normalization; degenerate-group + property tests
+- [x] **GRPO loss** — PPO-clipped policy gradient + k3 KL to reference; gradient-direction test
+- [x] **Rollout + training loop** — batching/masks, update step; toy-model CPU tests
 - [ ] **Training run** on a 0.5–1.5B model, accuracy curve on Countdown
-- [ ] Write-up: the math of GRPO and what the reward/advantage do
+- [x] Write-up: [the math of GRPO](docs/grpo.md)
 
 ## Why Countdown
 
