@@ -1,0 +1,6 @@
+torch>=2.1
+# training a real model:
+transformers>=4.40
+datasets>=2.0
+# dev:
+pytest>=7
