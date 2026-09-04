@@ -12,6 +12,10 @@ from .advantage import (
     broadcast_advantage_to_tokens,
     group_relative_advantage,
 )
+from .loss import (
+    compute_token_logprobs,
+    grpo_loss,
+)
 
 __all__ = [
     "CountdownProblem",
@@ -22,6 +26,8 @@ __all__ = [
     "format_prompt",
     "group_relative_advantage",
     "broadcast_advantage_to_tokens",
+    "grpo_loss",
+    "compute_token_logprobs",
 ]
 
 __version__ = "0.1.0"
