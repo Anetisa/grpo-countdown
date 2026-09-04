@@ -8,6 +8,10 @@ from .countdown import (
     generate_problem,
     safe_eval_expr,
 )
+from .advantage import (
+    broadcast_advantage_to_tokens,
+    group_relative_advantage,
+)
 
 __all__ = [
     "CountdownProblem",
@@ -16,6 +20,8 @@ __all__ = [
     "extract_answer",
     "safe_eval_expr",
     "format_prompt",
+    "group_relative_advantage",
+    "broadcast_advantage_to_tokens",
 ]
 
 __version__ = "0.1.0"
