@@ -174,7 +174,7 @@ def generate_rollouts(
 def train(
     model_name: str = "Qwen/Qwen2.5-0.5B-Instruct",
     iterations: int = 200,
-    prompts_per_iter: int = 8,
+    prompts_per_iter: int = 4,
     group_size: int = 8,
     inner_epochs: int = 1,
     lr: float = 1e-6,
@@ -244,7 +244,7 @@ def main():
     p = argparse.ArgumentParser(description="GRPO training on Countdown")
     p.add_argument("--model", default="Qwen/Qwen2.5-0.5B-Instruct")
     p.add_argument("--iterations", type=int, default=200)
-    p.add_argument("--prompts-per-iter", type=int, default=8)
+    p.add_argument("--prompts-per-iter", type=int, default=4)
     p.add_argument("--group-size", type=int, default=8)
     p.add_argument("--inner-epochs", type=int, default=1)
     p.add_argument("--lr", type=float, default=1e-6)

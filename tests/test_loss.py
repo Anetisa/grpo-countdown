@@ -117,3 +117,25 @@ def test_kl_has_zero_gradient_at_reference():
     gb = step_delta(0.5)
     # at init cur==ref so kl grad is zero; gradients should match (sanity, not drift)
     assert abs(g0 - gb) < 1e-4
+
+
+def test_chunked_logprobs_match_single_chunk():
+    """Memory-efficient chunking must give identical values to one big pass."""
+    torch.manual_seed(0)
+    N, T, V = 20, 6, 128   # N > chunk_size to exercise chunking
+    logits = torch.randn(N, T, V)
+    ids = torch.randint(0, V, (N, T))
+    a = compute_token_logprobs(logits, ids, chunk_size=4)
+    b = compute_token_logprobs(logits, ids, chunk_size=N)  # single chunk
+    torch.testing.assert_close(a, b, atol=1e-6, rtol=0)
+
+
+def test_chunked_logprobs_preserve_gradients():
+    """Gradients must still flow through the chunked path (current policy needs them)."""
+    torch.manual_seed(0)
+    N, T, V = 10, 4, 64
+    logits = torch.randn(N, T, V, requires_grad=True)
+    ids = torch.randint(0, V, (N, T))
+    lp = compute_token_logprobs(logits, ids, chunk_size=3)
+    lp.sum().backward()
+    assert logits.grad is not None and torch.isfinite(logits.grad).all()

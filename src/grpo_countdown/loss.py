@@ -28,17 +28,30 @@ import torch
 import torch.nn.functional as F
 
 
-def compute_token_logprobs(logits: torch.Tensor, target_ids: torch.Tensor) -> torch.Tensor:
-    """Log-prob of each taken token.
+def compute_token_logprobs(
+    logits: torch.Tensor, target_ids: torch.Tensor, chunk_size: int = 8
+) -> torch.Tensor:
+    """Log-prob of each taken token, computed memory-efficiently.
 
     Args:
         logits: [N, T, V] — model logits predicting each position's token.
         target_ids: [N, T] — the actually-taken token id at each position.
+        chunk_size: process this many rows at a time so we never materialize a
+            full [N, T, V] fp32 tensor. With LLM vocabularies (~150k) the fp32
+            cast of the whole batch is many GB and OOMs even large GPUs; chunking
+            caps peak memory to chunk_size rows while giving identical values.
     Returns:
         [N, T] log π(target_id) under a softmax over V.
     """
-    logp = F.log_softmax(logits.float(), dim=-1)
-    return torch.gather(logp, dim=-1, index=target_ids.unsqueeze(-1)).squeeze(-1)
+    N = logits.shape[0]
+    outs = []
+    for i in range(0, N, chunk_size):
+        lg = logits[i : i + chunk_size].float()
+        lp = F.log_softmax(lg, dim=-1)
+        outs.append(
+            torch.gather(lp, dim=-1, index=target_ids[i : i + chunk_size].unsqueeze(-1)).squeeze(-1)
+        )
+    return torch.cat(outs, dim=0)
 
 
 def _masked_seq_mean(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
