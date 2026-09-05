@@ -129,7 +129,15 @@ def generate_rollouts(
     model.eval()
     prompt_ids, completion_ids, rewards, texts, group_of = [], [], [], [], []
     for gi, prob in enumerate(problems):
-        prompt = format_prompt(prob)
+        user_msg = format_prompt(prob)
+        # Instruct models need their chat template to follow instructions/format.
+        if getattr(tokenizer, "chat_template", None):
+            prompt = tokenizer.apply_chat_template(
+                [{"role": "user", "content": user_msg}],
+                tokenize=False, add_generation_prompt=True,
+            )
+        else:
+            prompt = user_msg
         enc = tokenizer(prompt, return_tensors="pt").to(device)
         plen = enc.input_ids.shape[1]
         gen = model.generate(
@@ -176,13 +184,18 @@ def train(
     n_numbers: int = 4,
     seed: int = 0,
     device: str = "cuda",
+    log_every: int = 10,
+    log_file: str | None = None,
 ):
     """Full GRPO training on Countdown. Needs transformers + a GPU.
 
     Kept intentionally simple/readable over maximally efficient. For memory, the
     reference model is a frozen copy; on tight budgets swap it for a LoRA-disabled
-    pass of the same model.
+    pass of the same model. Every `log_every` iters it prints a couple of sample
+    completions so you can *see* what the policy is producing; metrics are also
+    appended to `log_file` (JSONL) for plotting.
     """
+    import json
     from copy import deepcopy
 
     from transformers import AutoModelForCausalLM, AutoTokenizer  # lazy import
@@ -191,12 +204,13 @@ def train(
     tok = AutoTokenizer.from_pretrained(model_name)
     if tok.pad_token_id is None:
         tok.pad_token = tok.eos_token
-    model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.bfloat16).to(device)
+    model = AutoModelForCausalLM.from_pretrained(model_name, dtype=torch.bfloat16).to(device)
     ref_model = deepcopy(model).eval()
     for p in ref_model.parameters():
         p.requires_grad_(False)
     optim = torch.optim.AdamW(model.parameters(), lr=lr)
 
+    logf = open(log_file, "w") if log_file else None
     for it in range(iterations):
         problems = [generate_problem(rng, n_numbers=n_numbers) for _ in range(prompts_per_iter)]
         batch, adv, old_lp, rewards, texts = generate_rollouts(
@@ -206,11 +220,50 @@ def train(
             metrics = grpo_update(model, ref_model, batch, adv, old_lp, optim,
                                   beta=beta, clip_eps=clip_eps)
         acc = (rewards >= 1.0).float().mean().item()
-        print(f"iter {it:4d} | acc {acc:.3f} | reward {rewards.mean():.3f} "
+        rec = {"iter": it, "acc": acc, "reward": rewards.mean().item(), **metrics}
+        print(f"iter {it:4d} | acc {acc:.3f} | reward {rec['reward']:.3f} "
               f"| kl {metrics['kl']:.4f} | loss {metrics['loss']:.4f}")
+        if logf:
+            logf.write(json.dumps(rec) + "\n")
+            logf.flush()
 
+        # visibility: peek at what the policy is actually generating
+        if it % log_every == 0:
+            for t in texts[:2]:
+                snippet = t.replace("\n", " ")[:160]
+                print(f"    sample: {snippet!r}")
+
+    if logf:
+        logf.close()
     return model
 
 
+def main():
+    import argparse
+
+    p = argparse.ArgumentParser(description="GRPO training on Countdown")
+    p.add_argument("--model", default="Qwen/Qwen2.5-0.5B-Instruct")
+    p.add_argument("--iterations", type=int, default=200)
+    p.add_argument("--prompts-per-iter", type=int, default=8)
+    p.add_argument("--group-size", type=int, default=8)
+    p.add_argument("--inner-epochs", type=int, default=1)
+    p.add_argument("--lr", type=float, default=1e-6)
+    p.add_argument("--beta", type=float, default=0.04)
+    p.add_argument("--clip-eps", type=float, default=0.2)
+    p.add_argument("--max-new-tokens", type=int, default=256)
+    p.add_argument("--n-numbers", type=int, default=4)
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--device", default="cuda")
+    p.add_argument("--log-every", type=int, default=10)
+    p.add_argument("--log-file", default="results_train.jsonl")
+    a = p.parse_args()
+    train(
+        model_name=a.model, iterations=a.iterations, prompts_per_iter=a.prompts_per_iter,
+        group_size=a.group_size, inner_epochs=a.inner_epochs, lr=a.lr, beta=a.beta,
+        clip_eps=a.clip_eps, max_new_tokens=a.max_new_tokens, n_numbers=a.n_numbers,
+        seed=a.seed, device=a.device, log_every=a.log_every, log_file=a.log_file,
+    )
+
+
 if __name__ == "__main__":
-    train()
+    main()

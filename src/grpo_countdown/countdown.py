@@ -118,15 +118,25 @@ def extract_answer(text: str) -> str | None:
 def compute_reward(
     text: str,
     problem: CountdownProblem,
-    format_reward: float = 0.1,
+    format_reward: float = 0.05,
+    numbers_reward: float = 0.1,
     tol: float = 1e-6,
 ) -> float:
-    """Verifiable reward for a model completion.
+    """Graded, verifiable reward — shaped for a soft cold start, but not hackable.
 
-    - 0.0            : no <answer> tag / unparseable / uses illegal numbers
-    - format_reward  : well-formed answer that evaluates, but wrong value
-    - 1.0            : evaluates to the target using only allowed numbers
-                       (each used at most once)
+    - 0.0            : no <answer> tag, OR the contents don't parse as arithmetic
+                       (garbage and exploits land here — the safe evaluator raises,
+                       nothing runs, nothing is rewarded)
+    - format_reward  : a *parseable* arithmetic expression in <answer> (a foothold:
+                       the model learned the output format), even if it used
+                       numbers it shouldn't
+    - numbers_reward : ... using only the allowed numbers (each at most once),
+                       but the wrong value
+    - 1.0            : ... and it evaluates to the target
+
+    Nothing above format_reward is reachable without valid arithmetic, and the
+    top reward needs the exact target — so the shaping guides learning without
+    being farmable by emitting empty or junk tags.
     """
     answer = extract_answer(text)
     if answer is None:
@@ -134,29 +144,40 @@ def compute_reward(
     try:
         value = safe_eval_expr(answer)
     except (ValueError, SyntaxError, ZeroDivisionError, TypeError):
-        return 0.0
+        return 0.0  # tag present but not valid arithmetic (incl. any exploit)
 
-    # numbers used must be a sub-multiset of the allowed numbers
+    reward = format_reward  # parseable arithmetic present
+
     used = _numbers_in_expr(answer)
     allowed = list(problem.numbers)
     for n in used:
         if n in allowed:
             allowed.remove(n)
         else:
-            return 0.0  # used a number not available (or reused one)
+            return reward  # valid arithmetic, but illegal/reused numbers
 
+    reward = numbers_reward
     if abs(value - problem.target) < tol:
         return 1.0
-    return format_reward
+    return reward
 
 
 def format_prompt(problem: CountdownProblem) -> str:
-    """Render a problem into an instruction prompt (R1-style: think, then answer)."""
+    """Render a problem into an instruction prompt (R1-style: think, then answer).
+
+    Includes a tiny worked example so a small instruct model reliably produces
+    the <answer> format. This is the *user message*; the training loop wraps it
+    in the model's chat template.
+    """
     nums = ", ".join(str(n) for n in problem.numbers)
     return (
-        "Using the numbers "
-        f"[{nums}], write an arithmetic expression (using +, -, *, / and each "
-        f"number at most once) that equals {problem.target}. "
-        "Show your reasoning, then give the expression inside "
-        "<answer> </answer> tags."
+        "You solve Countdown puzzles. Using the given numbers and the operators "
+        "+, -, *, / (each number at most once), write an expression equal to the "
+        "target. Think briefly, then put ONLY the final expression inside "
+        "<answer> </answer> tags.\n\n"
+        "Example:\n"
+        "Numbers: [2, 3, 4], target: 10\n"
+        "Reasoning: 2 * 3 = 6, and 6 + 4 = 10.\n"
+        "<answer>2 * 3 + 4</answer>\n\n"
+        f"Numbers: [{nums}], target: {problem.target}\n"
     )

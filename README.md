@@ -18,12 +18,13 @@ it. A small model (0.5–1.5B) learns to reason its way to correct expressions.
 
 Built incrementally; each piece is tested on CPU as it lands.
 
-- [x] **Countdown task + verifiable reward** — safe (`ast`-based, no `eval`) reward,
-      guaranteed-solvable problem generation, exploit tests
+- [x] **Countdown task + verifiable reward** — safe (`ast`-based, no `eval`), *graded* reward
+      (format / valid-numbers / correct), guaranteed-solvable generation, exploit tests
 - [x] **Group-relative advantage** — per-group reward normalization; degenerate-group + property tests
 - [x] **GRPO loss** — PPO-clipped policy gradient + k3 KL to reference; gradient-direction test
 - [x] **Rollout + training loop** — batching/masks, update step; toy-model CPU tests
 - [ ] **Training run** on a 0.5–1.5B model, accuracy curve on Countdown
+      (loop uses the model's chat template + a one-shot format example for a soft cold start)
 - [x] Write-up: [the math of GRPO](docs/grpo.md)
 
 ## Why Countdown

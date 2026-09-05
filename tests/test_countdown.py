@@ -61,12 +61,12 @@ def _p():
 
 
 def test_reward_correct_answer():
-    # 3 * 7 + 2 + ... need 25: 3*7=21, +2=23, +11=34 no. Use 11+7*2=25.
+    # 11 + 7 * 2 = 25
     assert compute_reward("<answer>11 + 7 * 2</answer>", _p()) == 1.0
 
 
-def test_reward_wrong_value_gets_format_reward():
-    r = compute_reward("<answer>3 + 7</answer>", _p(), format_reward=0.1)
+def test_reward_valid_numbers_wrong_value_gets_numbers_reward():
+    r = compute_reward("<answer>3 + 7</answer>", _p())
     assert r == 0.1
 
 
@@ -78,21 +78,32 @@ def test_reward_unparseable_is_zero():
     assert compute_reward("<answer>3 +</answer>", _p()) == 0.0
 
 
-def test_reward_rejects_disallowed_numbers():
-    # 99 is not in the allowed set -> no reward even if it hit the target
-    assert compute_reward("<answer>99 - 74</answer>", _p()) == 0.0
+def test_reward_disallowed_numbers_get_format_tier_only():
+    # parseable arithmetic (format learned) but 99/74 aren't on offer -> format tier
+    assert compute_reward("<answer>99 - 74</answer>", _p()) == 0.05
 
 
-def test_reward_rejects_reused_number():
-    # only one 3 available; using 3 twice must be rejected
+def test_reward_reused_number_gets_format_tier_only():
+    # only one 3 available; reusing it is illegal -> format tier, not correct
     p = CountdownProblem(numbers=[3, 7], target=6)
-    assert compute_reward("<answer>3 + 3</answer>", p) == 0.0
+    assert compute_reward("<answer>3 + 3</answer>", p) == 0.05
 
 
 def test_reward_no_code_execution_via_reward():
-    # even wrapped in <answer>, evil content must score 0, never run
+    # evil content inside a tag is unparseable -> 0.0, and never executed
     r = compute_reward("<answer>__import__('os').system('x')</answer>", _p())
     assert r == 0.0
+
+
+def test_reward_tiers_are_monotonic():
+    """correct > numbers > format > nothing — shaping points the right way,
+    and nothing above the format tier is reachable without valid numbers."""
+    p = CountdownProblem(numbers=[3, 7, 11, 2], target=25)
+    nothing = compute_reward("no tag", p)
+    fmt = compute_reward("<answer>99 - 74</answer>", p)     # valid arith, bad numbers
+    numbers = compute_reward("<answer>3 + 7</answer>", p)   # good numbers, wrong value
+    correct = compute_reward("<answer>11 + 7 * 2</answer>", p)
+    assert nothing < fmt < numbers < correct
 
 
 # --------------------------------------------------------------------------- #
