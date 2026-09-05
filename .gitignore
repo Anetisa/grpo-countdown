@@ -6,7 +6,7 @@ dist/
 .pytest_cache/
 .venv/
 venv/
-# training artifacts
+# training artifacts (heavy / regenerable) — but keep the committed curve + metric log
 checkpoints/
 runs/
 wandb/
